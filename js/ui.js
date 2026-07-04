@@ -7,6 +7,7 @@
 // State
 // ============================================================
 let currentCat = '全部';
+let currentSubCat = '';
 let currentPage = 1;
 let editingId = null;
 let stockItemId = null;
@@ -20,6 +21,11 @@ window.inventoryItems = [];
 // Tabs（已扩展：purchase, logs）
 // ============================================================
 async function switchTab(name) {
+  // 权限：viewer 只能看库存总览
+  if (currentUserRole === 'viewer' && name !== 'dashboard') {
+    showToast('👁️ 仅查看权限，只能浏览库存总览页面', 'warning');
+    return;
+  }
   document.querySelectorAll('.nav-tab').forEach((t, i) => {
     const tabs = ['dashboard', 'inventory', 'purchase', 'records', 'logs'];
     t.classList.toggle('active', tabs[i] === name);
@@ -163,9 +169,10 @@ async function renderInventoryTable() {
 
   let filtered = inv.filter(item => {
     const matchCat = currentCat === '全部' || item.category === currentCat;
+    const matchSubCat = !currentSubCat || (item.sub_category || '') === currentSubCat;
     const matchSearch = !search ||
-      (item.name + ' ' + (item.spec || '') + ' ' + (item.supplier || '') + ' ' + (item.batch_no || '')).toLowerCase().includes(search);
-    return matchCat && matchSearch;
+      (item.name + ' ' + (item.spec || '') + ' ' + (item.supplier || '') + ' ' + (item.batch_no || '') + ' ' + (item.sub_category || '')).toLowerCase().includes(search);
+    return matchCat && matchSubCat && matchSearch;
   });
 
   const total = filtered.length;
@@ -177,7 +184,7 @@ async function renderInventoryTable() {
 
   const tbody = document.getElementById('inventoryTbody');
   if (!slice.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="14">📭 暂无库存数据，点击"新增库存"开始录入</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="15">📭 暂无库存数据，点击"新增库存"开始录入</td></tr>';
   } else {
     tbody.innerHTML = slice.map(item => {
       const isLow = Number(item.quantity) <= Number(item.alert_qty) && Number(item.alert_qty) > 0;
@@ -191,6 +198,7 @@ async function renderInventoryTable() {
 
       return `<tr>
         <td><span class="cat-tag ${getCatClass(item.category)}">${item.category}</span></td>
+        <td><span class="sub-cat-tag">${escHtml(item.sub_category || '-')}</span></td>
         <td><strong>${escHtml(item.name)}</strong></td>
         <td class="text-light">${escHtml(item.spec || '-')}</td>
         <td>${escHtml(item.unit || '-')}</td>
@@ -239,8 +247,36 @@ function selectCat(el) {
   document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   currentCat = el.dataset.cat;
+  currentSubCat = '';
+  currentPage = 1;
+  // 显示/隐藏二级分类筛选
+  const subFilter = document.getElementById('subCatFilter');
+  if (subFilter) {
+    subFilter.style.display = (currentCat === '原材料') ? '' : 'none';
+    if (currentCat !== '原材料') {
+      // 重置二级分类筛选
+      subFilter.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+      subFilter.querySelector('.cat-tab').classList.add('active');
+    }
+  }
+  renderInventoryTable();
+}
+
+function selectSubCat(el) {
+  document.querySelectorAll('#subCatFilter .cat-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  currentSubCat = el.dataset.subcat;
   currentPage = 1;
   renderInventoryTable();
+}
+
+// 表单中分类切换时联动显示二级分类
+function onCategoryChange() {
+  const cat = document.getElementById('fCategory').value;
+  const group = document.getElementById('subCatGroup');
+  if (group) {
+    group.style.display = (cat === '原材料') ? '' : 'none';
+  }
 }
 
 // ============================================================
@@ -249,13 +285,14 @@ function selectCat(el) {
 function openAddModal() {
   editingId = null;
   document.getElementById('modalItemTitle').textContent = '新增库存';
-  const fields = ['fCategory', 'fName', 'fSpec', 'fUnit', 'fQty', 'fPrice', 'fAlert', 'fMinOrder', 'fBatchNo', 'fExpiry', 'fSupplier', 'fLocation', 'fRemark'];
+  const fields = ['fCategory', 'fSubCategory', 'fName', 'fSpec', 'fUnit', 'fQty', 'fPrice', 'fAlert', 'fMinOrder', 'fBatchNo', 'fExpiry', 'fSupplier', 'fLocation', 'fRemark'];
   fields.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    if (el.tagName === 'SELECT') el.value = '原材料';
+    if (el.tagName === 'SELECT') el.value = id === 'fCategory' ? '原材料' : '';
     else el.value = '';
   });
+  onCategoryChange(); // 初始化二级分类显示
   clearFormErrors();
   openModal('modalItem');
 }
@@ -267,6 +304,8 @@ async function openEditModal(id) {
   editingId = id;
   document.getElementById('modalItemTitle').textContent = '编辑库存';
   document.getElementById('fCategory').value = item.category;
+  document.getElementById('fSubCategory').value = item.sub_category || '';
+  onCategoryChange(); // 联动显示
   document.getElementById('fName').value = item.name;
   document.getElementById('fSpec').value = item.spec || '';
   document.getElementById('fUnit').value = item.unit || '';
@@ -327,6 +366,7 @@ async function handleSaveItem() {
   const itemData = {
     id: editingId,
     category: document.getElementById('fCategory').value,
+    sub_category: document.getElementById('fSubCategory').value || null,
     name,
     spec: document.getElementById('fSpec').value.trim(),
     unit: document.getElementById('fUnit').value.trim(),
@@ -349,7 +389,7 @@ async function handleSaveItem() {
     if (editingId && oldItem) {
       // UPDATE：计算差异
       const changes = {};
-      ['category', 'name', 'spec', 'unit', 'quantity', 'unit_price', 'alert_qty', 'min_order_qty', 'batch_no', 'expiry_date', 'supplier', 'location', 'remark'].forEach(k => {
+      ['category', 'sub_category', 'name', 'spec', 'unit', 'quantity', 'unit_price', 'alert_qty', 'min_order_qty', 'batch_no', 'expiry_date', 'supplier', 'location', 'remark'].forEach(k => {
         if (String(oldItem[k] ?? '') !== String(itemData[k] ?? '')) {
           changes[k] = { from: oldItem[k], to: itemData[k] };
         }
@@ -595,9 +635,9 @@ async function exportExcel() {
   const cat = currentCat === '全部' ? inv : inv.filter(i => i.category === currentCat);
   if (!cat.length) { showToast('当前没有数据可导出', 'warning'); return; }
 
-  const rows = [['分类', '品名', '规格/型号', '单位', '库存数量', '单价(元)', '库存价值(元)', '预警值', '最小订货量', '批次号', '有效期', '供应商', '存放位置', '备注']];
+  const rows = [['分类', '二级分类', '品名', '规格/型号', '单位', '库存数量', '单价(元)', '库存价值(元)', '预警值', '最小订货量', '批次号', '有效期', '供应商', '存放位置', '备注']];
   cat.forEach(i => rows.push([
-    i.category, i.name, i.spec, i.unit, i.quantity, i.unit_price,
+    i.category, i.sub_category || '', i.name, i.spec, i.unit, i.quantity, i.unit_price,
     (Number(i.quantity) * Number(i.unit_price)).toFixed(2),
     i.alert_qty || 0, i.min_order_qty || 0,
     i.batch_no || '', i.expiry_date || '',
@@ -605,7 +645,7 @@ async function exportExcel() {
   ]));
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [8, 12, 20, 6, 8, 8, 12, 8, 10, 14, 12, 12, 12, 12].map(w => ({ wch: w }));
+  ws['!cols'] = [8, 10, 12, 20, 6, 8, 8, 12, 8, 10, 14, 12, 12, 12, 12].map(w => ({ wch: w }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '库存数据');
   XLSX.writeFile(wb, `HMX库存_${fmtDate(new Date())}.xlsx`);
@@ -643,7 +683,8 @@ async function importCSV(event) {
     const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
     const colMap = {};
     const headerMap = {
-      '分类': 'category', '品名': 'name', '规格': 'spec', '规格/型号': 'spec',
+      '分类': 'category', '二级分类': 'sub_category',
+      '品名': 'name', '规格': 'spec', '规格/型号': 'spec',
       '单位': 'unit', '库存数量': 'quantity', '单价': 'unit_price', '单价(元)': 'unit_price',
       '预警值': 'alert_qty', '最小订货量': 'min_order_qty',
       '批次号': 'batch_no', '有效期': 'expiry_date',
@@ -659,7 +700,7 @@ async function importCSV(event) {
       const name = cols[colMap.name];
       if (!name) continue;
       items.push({
-        category: cols[colMap.category] || '原材料', name,
+        category: cols[colMap.category] || '原材料', sub_category: cols[colMap.sub_category] || null, name,
         spec: cols[colMap.spec] || '', unit: cols[colMap.unit] || '件',
         quantity: Number(cols[colMap.quantity]) || 0,
         unit_price: Number(cols[colMap.unit_price]) || 0,
