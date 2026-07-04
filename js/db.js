@@ -51,6 +51,7 @@ async function saveItem(itemData) {
   // itemData: { id, category, name, spec, unit, quantity, unit_price, alert_qty, min_order_qty, batch_no, expiry_date, supplier, location, remark }
   const dbData = {
     category: itemData.category,
+    sub_category: itemData.sub_category || null,
     name: itemData.name,
     spec: itemData.spec || '',
     unit: itemData.unit || '',
@@ -70,6 +71,7 @@ async function saveItem(itemData) {
   delete baseData.min_order_qty;
   delete baseData.batch_no;
   delete baseData.expiry_date;
+  delete baseData.sub_category;
 
   if (itemData.id) {
     // 更新
@@ -203,6 +205,7 @@ async function clearAllRecords() {
 async function batchImportItems(items) {
   const dbData = items.map(item => ({
     category: item.category || '原材料',
+    sub_category: item.sub_category || null,
     name: item.name,
     spec: item.spec || '',
     unit: item.unit || '件',
@@ -223,7 +226,7 @@ async function batchImportItems(items) {
   if (error && (error.message || '').includes('does not exist')) {
     // 容错：新字段不存在时去掉重试
     console.warn('新字段不存在，使用基础字段重试导入...');
-    const baseData = dbData.map(d => { const b = {...d}; delete b.min_order_qty; delete b.batch_no; delete b.expiry_date; return b; });
+    const baseData = dbData.map(d => { const b = {...d}; delete b.min_order_qty; delete b.batch_no; delete b.expiry_date; delete b.sub_category; return b; });
     const { error: err2 } = await supabaseClient.from('inventory_items').insert(baseData);
     if (err2) { console.error('批量导入失败:', err2); throw wrapSupabaseError(err2); }
   } else if (error) {
@@ -298,6 +301,7 @@ function mapItem(row) {
   return {
     id: row.id,
     category: row.category,
+    sub_category: row.sub_category || '',
     name: row.name,
     spec: row.spec,
     unit: row.unit,
