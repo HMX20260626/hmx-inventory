@@ -45,12 +45,12 @@
 </div>
 
 <!-- NAV TABS -->
-<div class="nav-tabs">
-  <div class="nav-tab active" onclick="switchTab('dashboard')">📊 库存总览</div>
-  <div class="nav-tab" onclick="switchTab('inventory')">📦 库存管理</div>
-  <div class="nav-tab" onclick="switchTab('purchase')">🛒 采购建议</div>
-  <div class="nav-tab" onclick="switchTab('records')">🔄 出入库记录</div>
-  <div class="nav-tab" onclick="switchTab('logs')">📝 操作日志</div>
+<div class="nav-tabs" id="navTabs">
+  <div class="nav-tab active" id="nav-dashboard" onclick="switchTab('dashboard')">📊 库存总览</div>
+  <div class="nav-tab" id="nav-inventory" onclick="switchTab('inventory')">📦 库存管理</div>
+  <div class="nav-tab" id="nav-purchase" onclick="switchTab('purchase')">🛒 采购建议</div>
+  <div class="nav-tab" id="nav-records" onclick="switchTab('records')">🔄 出入库记录</div>
+  <div class="nav-tab" id="nav-logs" onclick="switchTab('logs')">📝 操作日志</div>
 </div>
 
 <!-- MAIN CONTENT -->
@@ -126,6 +126,14 @@
         <div class="cat-tab" data-cat="半成品" onclick="selectCat(this)">🔨 半成品</div>
         <div class="cat-tab" data-cat="成品" onclick="selectCat(this)">🪑 成品</div>
       </div>
+      <div class="sub-cat-tabs" id="subCatFilter" style="display:none">
+        <div class="cat-tab active" data-subcat="" onclick="selectSubCat(this)">全部二级</div>
+        <div class="cat-tab" data-subcat="螺丝类" onclick="selectSubCat(this)">螺丝类</div>
+        <div class="cat-tab" data-subcat="铝件类" onclick="selectSubCat(this)">铝件类</div>
+        <div class="cat-tab" data-subcat="铁件类" onclick="selectSubCat(this)">铁件类</div>
+        <div class="cat-tab" data-subcat="注塑件类" onclick="selectSubCat(this)">注塑件类</div>
+        <div class="cat-tab" data-subcat="其他原材料" onclick="selectSubCat(this)">其他原材料</div>
+      </div>
     </div>
 
     <div id="alertBanner" class="alert-banner">
@@ -148,7 +156,7 @@
         <table>
           <thead>
             <tr>
-              <th>分类</th><th>品名</th><th>规格/型号</th><th>单位</th>
+              <th>分类</th><th>二级分类</th><th>品名</th><th>规格/型号</th><th>单位</th>
               <th>库存数量</th><th>单价(元)</th><th>库存价值</th><th>预警值</th>
               <th>最小订货量</th><th>批次号</th><th>有效期</th>
               <th>供应商</th><th>存放位置</th>
@@ -320,12 +328,25 @@
       <div class="form-row">
         <div class="form-group">
           <label>分类 <span class="req">*</span></label>
-          <select class="form-select" id="fCategory">
+          <select class="form-select" id="fCategory" onchange="onCategoryChange()">
             <option value="原材料">原材料</option>
             <option value="半成品">半成品</option>
             <option value="成品">成品</option>
           </select>
         </div>
+        <div class="form-group" id="subCatGroup" style="display:none">
+          <label>二级分类 <span class="hint-text">（原材料专用）</span></label>
+          <select class="form-select" id="fSubCategory">
+            <option value="">-- 请选择二级分类 --</option>
+            <option value="螺丝类">螺丝类</option>
+            <option value="铝件类">铝件类</option>
+            <option value="铁件类">铁件类</option>
+            <option value="注塑件类">注塑件类</option>
+            <option value="其他原材料">其他原材料</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
         <div class="form-group">
           <label>品名 <span class="req">*</span></label>
           <input class="form-input" id="fName" placeholder="例：橡木板">
