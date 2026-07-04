@@ -144,6 +144,21 @@ function updateRoleUI() {
   document.querySelectorAll('.action-cell').forEach(el => {
     el.style.display = (roleConfig.canEdit || roleConfig.canDelete || roleConfig.canStock) ? '' : 'none';
   });
+
+  // 权限：viewer 只能看库存总览
+  const isViewerOnly = (currentUserRole === 'viewer');
+  const restrictedTabs = ['nav-inventory', 'nav-purchase', 'nav-records', 'nav-logs'];
+  restrictedTabs.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = isViewerOnly ? 'none' : '';
+  });
+  // 如果当前在受限页面但角色是 viewer, 自动跳回库存总览
+  if (isViewerOnly) {
+    const activeTab = document.querySelector('.tab-content.active');
+    if (activeTab && activeTab.id !== 'tab-dashboard') {
+      switchTab('dashboard');
+    }
+  }
 }
 
 function toggleBtns(selector, show) {
