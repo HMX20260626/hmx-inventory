@@ -640,3 +640,31 @@ label span.req { color: var(--danger); }
   color: var(--text);
   font-weight: 500;
 }
+
+/* 二级分类 tag */
+.sub-cat-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: #f0e6dc;
+  color: #8B6914;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* 二级分类筛选栏 */
+.sub-cat-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.sub-cat-tabs .cat-tab {
+  padding: 2px 10px;
+  font-size: 12px;
+  border-radius: 100px;
+  background: #faf6f0;
+  border: 1px solid #e0d5c5;
+}
