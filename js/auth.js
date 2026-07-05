@@ -147,7 +147,7 @@ function updateRoleUI() {
 
   // 权限：viewer 只能看库存总览
   const isViewerOnly = (currentUserRole === 'viewer');
-  const restrictedTabs = ['nav-inventory', 'nav-purchase', 'nav-records', 'nav-logs'];
+  const restrictedTabs = ['nav-inventory', 'nav-purchase', 'nav-records', 'nav-logs', 'nav-drawing'];
   restrictedTabs.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = isViewerOnly ? 'none' : '';
