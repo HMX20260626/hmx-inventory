@@ -51,6 +51,7 @@
   <div class="nav-tab" id="nav-purchase" onclick="switchTab('purchase')">🛒 采购建议</div>
   <div class="nav-tab" id="nav-records" onclick="switchTab('records')">🔄 出入库记录</div>
   <div class="nav-tab" id="nav-logs" onclick="switchTab('logs')">📝 操作日志</div>
+  <div class="nav-tab" id="nav-drawing" onclick="switchTab('drawing')">📐 图纸解析</div>
 </div>
 
 <!-- MAIN CONTENT -->
@@ -284,6 +285,80 @@
     </div>
   </div>
 
+  <!-- ====== TAB: DRAWING PARSER (新增) ====== -->
+  <div id="tab-drawing" class="tab-content">
+    <div class="top-action-row">
+      <div class="section-title">📐 图纸物料解析</div>
+    </div>
+
+    <!-- 上传区域 -->
+    <div class="drawing-upload" id="drawingUploadArea">
+      <div class="upload-zone" onclick="document.getElementById('drawingFileInput').click()">
+        <div class="upload-icon">📂</div>
+        <div class="upload-text">点击上传或拖拽工程图纸</div>
+        <div class="upload-hint">支持格式：DWG · DXF · PDF · CSV · XLSX | 自动识别物料名称、数量、规格</div>
+      </div>
+      <input type="file" id="drawingFileInput" accept=".dwg,.dxf,.pdf,.csv,.xlsx,.xls" onchange="handleDrawingUpload(event)" style="display:none">
+      <div class="upload-status" id="drawingStatus" style="display:none"></div>
+    </div>
+
+    <!-- 解析结果 -->
+    <div id="drawingResults" style="display:none">
+      <!-- 摘要卡片 -->
+      <div class="purchase-summary" id="drawingSummary"></div>
+
+      <!-- 物料清单 -->
+      <div class="table-wrap" style="margin-top:14px">
+        <div class="top-action-row">
+          <div class="section-title">📋 识别物料清单</div>
+          <div class="action-btns">
+            <button class="btn btn-outline btn-sm" id="btnDeselectAll" onclick="toggleDrawingSelectAll(false)">取消全选</button>
+            <button class="btn btn-outline btn-sm" onclick="toggleDrawingSelectAll(true)">全选</button>
+            <button class="btn btn-warning" id="btnDeductDrawing" onclick="executeDrawingDeduction()" disabled>🔄 确认扣减选中项</button>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th width="40"><input type="checkbox" id="drawingSelectAll" onchange="toggleDrawingSelectAll(this.checked)" checked></th>
+                <th>物料名称</th><th>规格</th><th>图纸用量</th><th>单位</th>
+                <th>自动分类</th><th>库存匹配</th><th>现有库存</th><th>状态</th>
+              </tr>
+            </thead>
+            <tbody id="drawingMaterialsTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 异常报告 -->
+      <div id="drawingExceptions" style="display:none; margin-top:14px">
+        <div class="section-title" style="color:#e74c3c">⚠️ 异常报告</div>
+        <div class="table-wrap">
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>物料名称</th><th>规格</th><th>需求数量</th><th>异常类型</th><th>详情</th></tr></thead>
+              <tbody id="drawingExceptionsTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 扣减结果 -->
+      <div id="drawingDeductionResult" style="display:none; margin-top:14px">
+        <div class="section-title" style="color:#27ae60">✅ 扣减结果</div>
+        <div class="table-wrap">
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>物料</th><th>扣减数量</th><th>剩余库存</th><th>状态</th></tr></thead>
+              <tbody id="drawingDeductionTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /main -->
 
 </div><!-- /appContainer -->
@@ -472,7 +547,9 @@
 <script src="./js/logs.js"></script>
 <script src="./js/purchase.js"></script>
 <script src="./js/charts.js"></script>
+<script src="./js/drawing-parser.js"></script>
 <script src="./js/ui.js"></script>
+<script src="./js/drawing-ui.js"></script>
 <script src="./js/app.js"></script>
 
 <!-- Offline detection -->
