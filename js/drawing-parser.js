@@ -162,13 +162,16 @@ const DrawingParser = {
   // PDF 解析（使用 pdf.js CDN）
   // ============================================================
   async parsePDF(file) {
+    // 动态加载 pdf.js（UMD 版本，避免模块化问题）
     if (typeof pdfjsLib === 'undefined') {
-      // 动态加载 pdf.js
       await new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.mjs';
-        script.type = 'module';
-        script.onload = resolve;
+        script.src = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
+        script.onload = () => {
+          pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+          resolve();
+        };
         script.onerror = reject;
         document.head.appendChild(script);
       });
