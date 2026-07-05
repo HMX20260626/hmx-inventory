@@ -695,6 +695,18 @@ label span.req { color: var(--danger); }
 .upload-status.parsing { background: #fff3cd; color: #856404; }
 .upload-status.success { background: #d4edda; color: #155724; }
 .upload-status.error { background: #f8d7da; color: #721c24; }
+.upload-status.undo-info { background: #e8f0fe; color: #1a56db; }
 
 .row-warning { background: #fff8e1 !important; }
 .row-error { background: #fee !important; }
+
+/* 撤销按钮（醒目入口） */
+.btn-undo {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 6px 14px; font-size: 13px; font-weight: 600;
+  border-radius: 8px; cursor: pointer; transition: all 0.2s;
+  border: 2px solid #e74c3c; color: #e74c3c; background: #fff5f5;
+  margin-right: 8px;
+}
+.btn-undo:hover { background: #e74c3c; color: #fff; }
+.btn-undo:active { transform: scale(0.96); }
