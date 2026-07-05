@@ -459,6 +459,56 @@ const DrawingParser = {
     } catch (e) { /* ignore */ }
 
     return results;
+  },
+
+  // ============================================================
+  // 快照 / 撤销机制
+  // ============================================================
+  _snapshot: null,
+
+  // 保存当前解析状态快照（用于撤销）
+  saveSnapshot() {
+    this._snapshot = {
+      timestamp: new Date().toISOString(),
+      fileName: this.currentFileName || null,
+      materials: JSON.parse(JSON.stringify(this.materials)),
+      matched: JSON.parse(JSON.stringify(this.matched)),
+      unmatched: JSON.parse(JSON.stringify(this.unmatched)),
+      insufficient: JSON.parse(JSON.stringify(this.insufficient)),
+      inventoryCache: this.inventoryCache ? JSON.parse(JSON.stringify(this.inventoryCache)) : null
+    };
+    console.log('[快照] 已保存解析状态快照');
+    return this._snapshot;
+  },
+
+  // 恢复到快照状态
+  restoreSnapshot() {
+    if (!this._snapshot) {
+      console.warn('[快照] 无可用快照');
+      return false;
+    }
+    const snap = this._snapshot;
+    this.materials = JSON.parse(JSON.stringify(snap.materials));
+    this.matched = JSON.parse(JSON.stringify(snap.matched));
+    this.unmatched = JSON.parse(JSON.stringify(snap.unmatched));
+    this.insufficient = JSON.parse(JSON.stringify(snap.insufficient));
+    this.currentFileName = snap.fileName;
+    if (snap.inventoryCache) {
+      this.inventoryCache = JSON.parse(JSON.stringify(snap.inventoryCache));
+    }
+    console.log('[快照] 已恢复到快照状态');
+    return true;
+  },
+
+  // 清除快照并重置所有状态
+  clearAll() {
+    this._snapshot = null;
+    this.materials = [];
+    this.matched = [];
+    this.unmatched = [];
+    this.insufficient = [];
+    this.currentFileName = null;
+    console.log('[解析器] 已清除所有状态');
   }
 };
 
