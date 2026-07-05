@@ -27,7 +27,7 @@ async function switchTab(name) {
     return;
   }
   document.querySelectorAll('.nav-tab').forEach((t, i) => {
-    const tabs = ['dashboard', 'inventory', 'purchase', 'records', 'logs'];
+    const tabs = ['dashboard', 'inventory', 'purchase', 'records', 'logs', 'drawing'];
     t.classList.toggle('active', tabs[i] === name);
   });
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
