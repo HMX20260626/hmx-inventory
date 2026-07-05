@@ -18,6 +18,11 @@ async function handleDrawingUpload(event) {
   statusEl.className = 'upload-status parsing';
 
   try {
+    // 如果有旧解析结果，先保存快照
+    if (drawingParsedData && drawingParsedData.materials && drawingParsedData.materials.length) {
+      DrawingParser.saveSnapshot();
+    }
+
     DrawingParser.currentFileName = file.name;
     const result = await DrawingParser.parseFile(file);
 
@@ -35,6 +40,7 @@ async function handleDrawingUpload(event) {
     statusEl.className = 'upload-status success';
 
     updateDrawingButtons();
+    updateUndoButton();
   } catch (err) {
     statusEl.innerHTML = '❌ 解析失败：' + err.message;
     statusEl.className = 'upload-status error';
@@ -53,6 +59,76 @@ function resetDrawingUpload() {
   document.getElementById('drawingUploadArea').style.display = '';
   document.getElementById('drawingStatus').style.display = 'none';
   document.getElementById('drawingDeductionResult').style.display = 'none';
+}
+
+// ============================================================
+// 撤销解析结果
+// ============================================================
+function undoDrawingParse() {
+  // 检查是否有快照可恢复
+  if (!DrawingParser._snapshot) {
+    // 无快照：直接重置到上传状态
+    DrawingParser.clearAll();
+    resetDrawingUpload();
+    showToast('↩️ 已清除当前解析结果，恢复到初始状态', 'info');
+    return;
+  }
+
+  // 确认操作
+  if (!confirm(
+    '⚠️ 撤销解析结果\n\n' +
+    '将恢复至上一次解析前的状态。\n' +
+    '当前解析结果将被丢弃。\n\n' +
+    '注意：已执行的扣减操作无法撤销！\n\n' +
+    '确定要撤销吗？'
+  )) return;
+
+  // 恢复快照
+  const restored = DrawingParser.restoreSnapshot();
+  if (!restored) {
+    showToast('❌ 快照恢复失败', 'error');
+    return;
+  }
+
+  // 重建解析数据
+  drawingParsedData = {
+    total: DrawingParser.materials.length,
+    matched: DrawingParser.matched.length,
+    unmatched: DrawingParser.unmatched.length,
+    insufficient: DrawingParser.insufficient.length,
+    materials: DrawingParser.materials,
+    exceptions: [...DrawingParser.unmatched, ...DrawingParser.insufficient]
+  };
+
+  // 重新渲染
+  renderDrawingSummary(drawingParsedData);
+  renderDrawingMaterials(drawingParsedData);
+  renderDrawingExceptions(drawingParsedData);
+
+  // 隐藏扣减结果
+  document.getElementById('drawingDeductionResult').style.display = 'none';
+
+  // 更新状态提示
+  const statusEl = document.getElementById('drawingStatus');
+  statusEl.innerHTML = '↩️ 已撤销到上一个解析结果（' + (DrawingParser._snapshot.fileName || '未知文件') + '）';
+  statusEl.className = 'upload-status undo-info';
+
+  updateDrawingButtons();
+  updateUndoButton();
+
+  showToast('↩️ 已恢复至上一次解析状态', 'info');
+}
+
+// ============================================================
+// 更新撤销按钮状态
+// ============================================================
+function updateUndoButton() {
+  const btn = document.getElementById('btnUndoDrawing');
+  if (!btn) return;
+  const hasSnapshot = !!DrawingParser._snapshot;
+  btn.style.display = '';
+  btn.textContent = hasSnapshot ? '↩️ 撤销解析' : '🔄 重新上传';
+  btn.className = hasSnapshot ? 'btn btn-undo' : 'btn btn-outline btn-sm';
 }
 
 // ============================================================
