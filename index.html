@@ -312,6 +312,7 @@
         <div class="top-action-row">
           <div class="section-title">📋 识别物料清单</div>
           <div class="action-btns">
+            <button class="btn btn-undo" id="btnUndoDrawing" onclick="undoDrawingParse()" title="撤销当前解析结果">↩️ 撤销解析</button>
             <button class="btn btn-outline btn-sm" id="btnDeselectAll" onclick="toggleDrawingSelectAll(false)">取消全选</button>
             <button class="btn btn-outline btn-sm" onclick="toggleDrawingSelectAll(true)">全选</button>
             <button class="btn btn-warning" id="btnDeductDrawing" onclick="executeDrawingDeduction()" disabled>🔄 确认扣减选中项</button>
