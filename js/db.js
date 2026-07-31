@@ -61,6 +61,8 @@ async function saveItem(itemData) {
     min_order_qty: Number(itemData.min_order_qty) || 0,
     batch_no: itemData.batch_no || null,
     expiry_date: itemData.expiry_date || null,
+    wip_qty: Number(itemData.wip_qty) || 0,
+    project_no: itemData.project_no || null,
     supplier: itemData.supplier || '',
     location: itemData.location || '',
     remark: itemData.remark || '',
@@ -72,6 +74,8 @@ async function saveItem(itemData) {
   delete baseData.batch_no;
   delete baseData.expiry_date;
   delete baseData.sub_category;
+  delete baseData.wip_qty;
+  delete baseData.project_no;
 
   if (itemData.id) {
     // 更新
@@ -218,6 +222,8 @@ async function batchImportItems(items) {
     supplier: item.supplier || '',
     location: item.location || '',
     remark: item.remark || '',
+    wip_qty: Number(item.wip_qty) || 0,
+    project_no: item.project_no || null,
   }));
 
   const { error } = await supabaseClient
@@ -226,7 +232,7 @@ async function batchImportItems(items) {
   if (error && (error.message || '').includes('does not exist')) {
     // 容错：新字段不存在时去掉重试
     console.warn('新字段不存在，使用基础字段重试导入...');
-    const baseData = dbData.map(d => { const b = {...d}; delete b.min_order_qty; delete b.batch_no; delete b.expiry_date; delete b.sub_category; return b; });
+    const baseData = dbData.map(d => { const b = {...d}; delete b.min_order_qty; delete b.batch_no; delete b.expiry_date; delete b.sub_category; delete b.wip_qty; delete b.project_no; return b; });
     const { error: err2 } = await supabaseClient.from('inventory_items').insert(baseData);
     if (err2) { console.error('批量导入失败:', err2); throw wrapSupabaseError(err2); }
   } else if (error) {
@@ -301,11 +307,14 @@ function mapItem(row) {
   return {
     id: row.id,
     category: row.category,
+    itemClass: row.category,   // 三类代码：standard / custom / connector
     sub_category: row.sub_category || '',
     name: row.name,
     spec: row.spec,
     unit: row.unit,
     quantity: Number(row.quantity),
+    wip_qty: Number(row.wip_qty ?? 0),     // 在制量（定制件）
+    project_no: row.project_no || '',       // 项目号（定制件）
     unit_price: Number(row.unit_price),
     alert_qty: Number(row.alert_qty ?? row.alert_threshold ?? 0),
     min_order_qty: Number(row.min_order_qty ?? 0),
@@ -347,4 +356,206 @@ function getCachedData(key) {
 function getCacheAge() {
   const ts = localStorage.getItem(CACHE_KEYS.timestamp);
   return ts ? Date.now() - parseInt(ts) : Infinity;
+}
+
+// ============================================================
+// v2 扩展：套餐 / 出库 / 盘点
+// ============================================================
+
+// ---------- 套餐（BOM） ----------
+async function loadPackages() {
+  const { data, error } = await supabaseClient
+    .from('packages').select('*').order('name', { ascending: true });
+  if (error) throw wrapSupabaseError(error);
+  return data || [];
+}
+
+async function loadPackageItems(packageId) {
+  const { data, error } = await supabaseClient
+    .from('package_items')
+    .select('id, package_id, item_id, qty, item:inventory_items(id, name, spec, unit, quantity)')
+    .eq('package_id', packageId);
+  if (error) throw wrapSupabaseError(error);
+  return data || [];
+}
+
+async function savePackage(pkg, items) {
+  let pkgId = pkg.id;
+  if (pkgId) {
+    const { error } = await supabaseClient
+      .from('packages').update({ name: pkg.name, description: pkg.description || '' }).eq('id', pkgId);
+    if (error) throw wrapSupabaseError(error);
+    const { error: dErr } = await supabaseClient.from('package_items').delete().eq('package_id', pkgId);
+    if (dErr) throw wrapSupabaseError(dErr);
+  } else {
+    const { data, error } = await supabaseClient
+      .from('packages').insert({ name: pkg.name, description: pkg.description || '' }).select('id').single();
+    if (error) throw wrapSupabaseError(error);
+    pkgId = data.id;
+  }
+  if (items && items.length) {
+    const rows = items.map(it => ({ package_id: pkgId, item_id: it.item_id, qty: Number(it.qty) || 1 }));
+    const { error } = await supabaseClient.from('package_items').insert(rows);
+    if (error) throw wrapSupabaseError(error);
+  }
+  await Logs.write(pkg.id ? 'UPDATE' : 'CREATE', 'PACKAGE', pkgId, pkg.name, { itemCount: (items || []).length });
+}
+
+async function deletePackage(id, name) {
+  const { error: d1 } = await supabaseClient.from('package_items').delete().eq('package_id', id);
+  if (d1) throw wrapSupabaseError(d1);
+  const { error: d2 } = await supabaseClient.from('packages').delete().eq('id', id);
+  if (d2) throw wrapSupabaseError(d2);
+  await Logs.write('DELETE', 'PACKAGE', id, name || '套餐', {});
+}
+
+// ---------- 出库（套餐组合 + 个性化追加，事务化扣减） ----------
+async function createOutbound(lines, meta) {
+  // lines: [{ itemId, qty, isCustomAdd }]
+  // meta:  { packageId, sets, packageName }
+  if (!lines || !lines.length) throw new Error('出库明细为空');
+
+  const inv = await loadInventory();
+  const byId = {};
+  inv.forEach(i => { byId[i.id] = i; });
+
+  // 1) 聚合并按库存校验
+  const need = {};
+  for (const l of lines) {
+    const q = Number(l.qty);
+    if (!q || q <= 0) throw new Error('出库数量必须大于 0');
+    need[l.itemId] = (need[l.itemId] || 0) + q;
+  }
+  const insufficient = [];
+  for (const id in need) {
+    const it = byId[id];
+    if (!it) { insufficient.push('未知物品'); continue; }
+    if (Number(it.quantity) < need[id]) {
+      insufficient.push(`${it.name}（需 ${need[id]} / 余 ${it.quantity} ${it.unit || ''}）`);
+    }
+  }
+  if (insufficient.length) {
+    throw new Error('以下物品库存不足，无法出库：\n' + insufficient.join('、'));
+  }
+
+  // 2) 写入出库单头
+  const { data: so, error: soErr } = await supabaseClient
+    .from('stock_out')
+    .insert({
+      type: meta.packageId ? 'package' : 'single',
+      package_id: meta.packageId || null,
+      sets: meta.sets || null,
+      operator: (Auth && Auth.getCurrentUser) ? Auth.getCurrentUser() : 'system',
+      created_at: new Date().toISOString(),
+    })
+    .select('id').single();
+  if (soErr) throw wrapSupabaseError(soErr);
+  const outId = so.id;
+
+  // 3) 逐行扣减 + 写流水 + 写明细（失败回滚已扣减项）
+  const updated = [];
+  try {
+    for (const l of lines) {
+      const it = byId[l.itemId];
+      const newQty = Number(it.quantity) - Number(l.qty);
+      const { error: uErr } = await supabaseClient.from('inventory_items').update({ quantity: newQty }).eq('id', l.itemId);
+      if (uErr) throw wrapSupabaseError(uErr);
+      updated.push({ id: l.itemId, prev: it.quantity });
+
+      await supabaseClient.from('stock_records').insert({
+        item_id: l.itemId, item_name: it.name, stock_type: '出库',
+        quantity_change: Number(l.qty),
+        reason: meta.packageId ? ('套餐出库：' + (meta.packageName || '')) : '出库',
+      });
+      await supabaseClient.from('stock_out_items').insert({
+        out_id: outId, item_id: l.itemId, qty: Number(l.qty), is_custom_add: !!l.isCustomAdd,
+      });
+    }
+  } catch (e) {
+    for (const u of updated) {
+      await supabaseClient.from('inventory_items').update({ quantity: u.prev }).eq('id', u.id);
+    }
+    throw new Error('出库中断，已回滚：' + e.message);
+  }
+
+  await Logs.write('STOCK_OUT', 'OUTBOUND', outId, meta.packageName || '零散出库', {
+    type: meta.packageId ? 'package' : 'single', sets: meta.sets, lines,
+  });
+  return outId;
+}
+
+async function loadOutbounds(limit = 50) {
+  const { data, error } = await supabaseClient
+    .from('stock_out')
+    .select('*, package:packages(name), items:stock_out_items(id, item_id, qty, is_custom_add, item:inventory_items(name, unit))')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw wrapSupabaseError(error);
+  return data || [];
+}
+
+// ---------- 盘点（生成 → 录入 → 过账） ----------
+async function generateStocktake() {
+  const inv = await loadInventory();
+  const { data: st, error } = await supabaseClient
+    .from('stocktake')
+    .insert({ operator: (Auth && Auth.getCurrentUser) ? Auth.getCurrentUser() : 'system', status: 'open', created_at: new Date().toISOString() })
+    .select('id').single();
+  if (error) throw wrapSupabaseError(error);
+  if (inv.length) {
+    const rows = inv.map(i => ({ take_id: st.id, item_id: i.id, system_qty: Number(i.quantity), actual_qty: null }));
+    const { error: e2 } = await supabaseClient.from('stocktake_items').insert(rows);
+    if (e2) throw wrapSupabaseError(e2);
+  }
+  await Logs.write('CREATE', 'STOCKTAKE', st.id, '新建盘点单', { count: inv.length });
+  return st.id;
+}
+
+async function loadStocktakeItems(takeId) {
+  const { data, error } = await supabaseClient
+    .from('stocktake_items')
+    .select('id, take_id, item_id, system_qty, actual_qty, item:inventory_items(name, spec, unit, category)')
+    .eq('take_id', takeId);
+  if (error) throw wrapSupabaseError(error);
+  return data || [];
+}
+
+async function saveStocktakeActual(takeId, actualMap) {
+  // actualMap: { itemId: actualQty }
+  for (const [itemId, actual] of Object.entries(actualMap)) {
+    const val = (actual === '' || actual == null) ? null : Number(actual);
+    const { error } = await supabaseClient
+      .from('stocktake_items').update({ actual_qty: val }).eq('take_id', takeId).eq('item_id', itemId);
+    if (error) throw wrapSupabaseError(error);
+  }
+}
+
+async function postStocktake(takeId) {
+  const { data: items, error } = await supabaseClient
+    .from('stocktake_items').select('*').eq('take_id', takeId);
+  if (error) throw wrapSupabaseError(error);
+
+  const inv = await loadInventory();
+  const byId = {};
+  inv.forEach(i => { byId[i.id] = i; });
+
+  const updated = [];
+  for (const it of items) {
+    if (it.actual_qty === null || it.actual_qty === '') continue;
+    const cur = byId[it.item_id];
+    if (!cur) continue;
+    const actual = Number(it.actual_qty);
+    if (actual === Number(cur.quantity)) continue;
+    const { error: uErr } = await supabaseClient.from('inventory_items').update({ quantity: actual }).eq('id', it.item_id);
+    if (uErr) throw wrapSupabaseError(uErr);
+    updated.push({ id: it.item_id, name: cur.name, diff: actual - Number(cur.quantity) });
+    await supabaseClient.from('stock_records').insert({
+      item_id: it.item_id, item_name: cur.name, stock_type: '调整',
+      quantity_change: actual, reason: '盘点调整',
+    });
+  }
+  const { error: cErr } = await supabaseClient.from('stocktake').update({ status: 'closed' }).eq('id', takeId);
+  if (cErr) throw wrapSupabaseError(cErr);
+  await Logs.write('STOCK_ADJUST', 'STOCKTAKE', takeId, '盘点过账', { adjusted: updated });
+  return updated.length;
 }
