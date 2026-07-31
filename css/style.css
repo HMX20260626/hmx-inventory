@@ -710,3 +710,45 @@ label span.req { color: var(--danger); }
 }
 .btn-undo:hover { background: #e74c3c; color: #fff; }
 .btn-undo:active { transform: scale(0.96); }
+
+/* ============================================================
+   v2：三大类产品标签
+   ============================================================ */
+.cat-standard { background: #E8F0FE; color: #2E5DBB; }
+.cat-custom   { background: #F3E8F7; color: #7B2FBE; }
+.cat-connector{ background: #E6F4EC; color: #1E7A4C; }
+
+/* ============================================================
+   v2：出库布局
+   ============================================================ */
+.ob-layout { display: grid; grid-template-columns: 320px 1fr; gap: 20px; align-items: start; }
+@media (max-width: 900px) { .ob-layout { grid-template-columns: 1fr; } }
+.ob-left { background: var(--bg-card); border-radius: 12px; padding: 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 12px; }
+.ob-right { background: var(--bg-card); border-radius: 12px; padding: 18px; box-shadow: var(--shadow); }
+.ob-pkg-info { font-size: 13px; color: var(--text-light); }
+.ob-tip { font-size: 12px; color: var(--text-light); background: var(--bg-sidebar); border-radius: 8px; padding: 8px 12px; line-height: 1.6; }
+.ob-add-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ob-add-row .form-select { flex: 1; min-width: 180px; }
+.ob-qty { max-width: 110px; }
+.ob-validation { margin-top: 12px; font-size: 13px; min-height: 20px; }
+#obConfirm:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ============================================================
+   v2：套餐编辑器
+   ============================================================ */
+.modal-card {
+  background: var(--bg-card); border-radius: 16px; margin-top: 16px;
+  box-shadow: var(--shadow); border: 1px solid var(--border); overflow: hidden;
+}
+.modal-card .modal-header { padding: 16px 20px; border-bottom: 1.5px solid var(--border); }
+.modal-card .modal-header h2 { font-size: 16px; font-weight: 700; color: var(--text); }
+.modal-card .modal-body { padding: 18px 20px; }
+.modal-card .modal-footer { padding: 14px 20px; border-top: 1.5px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+.pkg-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.pkg-row .form-select { flex: 1; }
+.pkg-row .form-input { max-width: 120px; }
+
+/* ============================================================
+   v2：盘点
+   ============================================================ */
+.st-actual { max-width: 120px; }
