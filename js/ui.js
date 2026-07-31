@@ -27,7 +27,7 @@ async function switchTab(name) {
     return;
   }
   document.querySelectorAll('.nav-tab').forEach((t, i) => {
-    const tabs = ['dashboard', 'inventory', 'purchase', 'records', 'logs', 'drawing'];
+    const tabs = ['dashboard', 'inventory', 'outbound', 'packages', 'stocktake', 'purchase', 'records', 'logs', 'drawing'];
     t.classList.toggle('active', tabs[i] === name);
   });
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -37,6 +37,9 @@ async function switchTab(name) {
   if (name === 'purchase') await safeLoad(renderPurchaseTable);
   if (name === 'records') await safeLoad(renderRecords);
   if (name === 'logs') await safeLoad(renderLogs);
+  if (name === 'outbound') await safeLoad(renderOutbound);
+  if (name === 'packages') await safeLoad(renderPackages);
+  if (name === 'stocktake') await safeLoad(renderStocktake);
 }
 
 // ============================================================
@@ -74,8 +77,9 @@ async function refreshDashboard() {
   document.getElementById('statAlert').textContent = alertCount;
 
   // Charts
-  const cats = ['原材料', '半成品', '成品'];
-  const catVals = cats.map(c => inv.filter(i => i.category === c).reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0));
+  const cats = ['标准件', '定制件', '连接件'];
+  const codes = ['standard', 'custom', 'connector'];
+  const catVals = codes.map(c => inv.filter(i => i.category === c).reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0));
 
   renderBarChart(cats, catVals);
   renderLowStockTable(inv);
@@ -138,9 +142,10 @@ function renderLowStockTable(inv) {
 // Inventory Table
 // ============================================================
 function getCatClass(cat) {
-  if (cat === '原材料') return 'cat-raw';
-  if (cat === '半成品') return 'cat-semi';
-  return 'cat-finish';
+  if (cat === 'standard') return 'cat-standard';
+  if (cat === 'custom') return 'cat-custom';
+  if (cat === 'connector') return 'cat-connector';
+  return 'cat-standard';
 }
 
 function renderExpiryClass(dateStr) {
@@ -170,8 +175,8 @@ async function renderInventoryTable() {
   let filtered = inv.filter(item => {
     const matchCat = currentCat === '全部' || item.category === currentCat;
     const matchSubCat = !currentSubCat || (item.sub_category || '') === currentSubCat;
-    const matchSearch = !search ||
-      (item.name + ' ' + (item.spec || '') + ' ' + (item.supplier || '') + ' ' + (item.batch_no || '') + ' ' + (item.sub_category || '')).toLowerCase().includes(search);
+      const matchSearch = !search ||
+      (item.name + ' ' + (item.spec || '') + ' ' + (item.supplier || '') + ' ' + (item.batch_no || '') + ' ' + (item.sub_category || '') + ' ' + (item.project_no || '')).toLowerCase().includes(search);
     return matchCat && matchSubCat && matchSearch;
   });
 
@@ -184,7 +189,7 @@ async function renderInventoryTable() {
 
   const tbody = document.getElementById('inventoryTbody');
   if (!slice.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="15">📭 暂无库存数据，点击"新增库存"开始录入</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="16">📭 暂无库存数据，点击"新增库存"开始录入</td></tr>';
   } else {
     tbody.innerHTML = slice.map(item => {
       const isLow = Number(item.quantity) <= Number(item.alert_qty) && Number(item.alert_qty) > 0;
@@ -197,7 +202,7 @@ async function renderInventoryTable() {
       if (roleConfig.canDelete) actionBtns.push(`<button class="btn btn-danger btn-sm" onclick="handleDelete('${item.id}')">🗑️</button>`);
 
       return `<tr>
-        <td><span class="cat-tag ${getCatClass(item.category)}">${item.category}</span></td>
+        <td>${classTag(item.category)}</td>
         <td><span class="sub-cat-tag">${escHtml(item.sub_category || '-')}</span></td>
         <td><strong>${escHtml(item.name)}</strong></td>
         <td class="text-light">${escHtml(item.spec || '-')}</td>
@@ -211,6 +216,7 @@ async function renderInventoryTable() {
         <td class="${expiryCls}">${expiryText}</td>
         <td>${escHtml(item.supplier || '-')}</td>
         <td>${escHtml(item.location || '-')}</td>
+        <td class="text-light">${item.category === 'custom' ? ('在制 ' + (item.wip_qty || 0) + ' / 项目 ' + escHtml(item.project_no || '-')) : '-'}</td>
         <td class="action-cell" style="white-space:nowrap">${actionBtns.join(' ')}</td>
       </tr>`;
     }).join('');
@@ -252,8 +258,8 @@ function selectCat(el) {
   // 显示/隐藏二级分类筛选
   const subFilter = document.getElementById('subCatFilter');
   if (subFilter) {
-    subFilter.style.display = (currentCat === '原材料') ? '' : 'none';
-    if (currentCat !== '原材料') {
+    subFilter.style.display = (currentCat !== '全部') ? '' : 'none';
+    if (currentCat === '全部') {
       // 重置二级分类筛选
       subFilter.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
       subFilter.querySelector('.cat-tab').classList.add('active');
@@ -274,9 +280,9 @@ function selectSubCat(el) {
 function onCategoryChange() {
   const cat = document.getElementById('fCategory').value;
   const group = document.getElementById('subCatGroup');
-  if (group) {
-    group.style.display = (cat === '原材料') ? '' : 'none';
-  }
+  const customGroup = document.getElementById('customGroup');
+  if (group) group.style.display = '';  // 二级分类对所有大类可用
+  if (customGroup) customGroup.style.display = (cat === 'custom') ? '' : 'none';
 }
 
 // ============================================================
@@ -285,11 +291,11 @@ function onCategoryChange() {
 function openAddModal() {
   editingId = null;
   document.getElementById('modalItemTitle').textContent = '新增库存';
-  const fields = ['fCategory', 'fSubCategory', 'fName', 'fSpec', 'fUnit', 'fQty', 'fPrice', 'fAlert', 'fMinOrder', 'fBatchNo', 'fExpiry', 'fSupplier', 'fLocation', 'fRemark'];
+  const fields = ['fCategory', 'fSubCategory', 'fWipQty', 'fProjectNo', 'fName', 'fSpec', 'fUnit', 'fQty', 'fPrice', 'fAlert', 'fMinOrder', 'fBatchNo', 'fExpiry', 'fSupplier', 'fLocation', 'fRemark'];
   fields.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    if (el.tagName === 'SELECT') el.value = id === 'fCategory' ? '原材料' : '';
+    if (el.tagName === 'SELECT') el.value = id === 'fCategory' ? 'standard' : '';
     else el.value = '';
   });
   onCategoryChange(); // 初始化二级分类显示
@@ -305,6 +311,8 @@ async function openEditModal(id) {
   document.getElementById('modalItemTitle').textContent = '编辑库存';
   document.getElementById('fCategory').value = item.category;
   document.getElementById('fSubCategory').value = item.sub_category || '';
+  document.getElementById('fWipQty').value = item.wip_qty || 0;
+  document.getElementById('fProjectNo').value = item.project_no || '';
   onCategoryChange(); // 联动显示
   document.getElementById('fName').value = item.name;
   document.getElementById('fSpec').value = item.spec || '';
@@ -378,6 +386,8 @@ async function handleSaveItem() {
     expiry_date: document.getElementById('fExpiry').value || null,
     supplier: document.getElementById('fSupplier').value.trim(),
     location: document.getElementById('fLocation').value.trim(),
+    wip_qty: Number(document.getElementById('fWipQty').value) || 0,
+    project_no: document.getElementById('fProjectNo').value.trim() || null,
     remark: document.getElementById('fRemark').value.trim(),
   };
 
@@ -389,7 +399,7 @@ async function handleSaveItem() {
     if (editingId && oldItem) {
       // UPDATE：计算差异
       const changes = {};
-      ['category', 'sub_category', 'name', 'spec', 'unit', 'quantity', 'unit_price', 'alert_qty', 'min_order_qty', 'batch_no', 'expiry_date', 'supplier', 'location', 'remark'].forEach(k => {
+      ['category', 'sub_category', 'wip_qty', 'project_no', 'name', 'spec', 'unit', 'quantity', 'unit_price', 'alert_qty', 'min_order_qty', 'batch_no', 'expiry_date', 'supplier', 'location', 'remark'].forEach(k => {
         if (String(oldItem[k] ?? '') !== String(itemData[k] ?? '')) {
           changes[k] = { from: oldItem[k], to: itemData[k] };
         }
@@ -635,13 +645,15 @@ async function exportExcel() {
   const cat = currentCat === '全部' ? inv : inv.filter(i => i.category === currentCat);
   if (!cat.length) { showToast('当前没有数据可导出', 'warning'); return; }
 
-  const rows = [['分类', '二级分类', '品名', '规格/型号', '单位', '库存数量', '单价(元)', '库存价值(元)', '预警值', '最小订货量', '批次号', '有效期', '供应商', '存放位置', '备注']];
+  const rows = [['分类', '二级分类', '品名', '规格/型号', '单位', '库存数量', '单价(元)', '库存价值(元)', '预警值', '最小订货量', '批次号', '有效期', '供应商', '存放位置', '在制/项目', '备注']];
   cat.forEach(i => rows.push([
-    i.category, i.sub_category || '', i.name, i.spec, i.unit, i.quantity, i.unit_price,
+    classLabel(i.category), i.sub_category || '', i.name, i.spec, i.unit, i.quantity, i.unit_price,
     (Number(i.quantity) * Number(i.unit_price)).toFixed(2),
     i.alert_qty || 0, i.min_order_qty || 0,
     i.batch_no || '', i.expiry_date || '',
-    i.supplier, i.location, i.remark
+    i.supplier, i.location,
+    (i.category === 'custom' ? ('在制' + (i.wip_qty || 0) + '/项目' + (i.project_no || '-')) : '-'),
+    i.remark
   ]));
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
@@ -700,7 +712,7 @@ async function importCSV(event) {
       const name = cols[colMap.name];
       if (!name) continue;
       items.push({
-        category: cols[colMap.category] || '原材料', sub_category: cols[colMap.sub_category] || null, name,
+        category: cols[colMap.category] || 'standard', sub_category: cols[colMap.sub_category] || null, name,
         spec: cols[colMap.spec] || '', unit: cols[colMap.unit] || '件',
         quantity: Number(cols[colMap.quantity]) || 0,
         unit_price: Number(cols[colMap.unit_price]) || 0,
