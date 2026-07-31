@@ -48,6 +48,9 @@
 <div class="nav-tabs" id="navTabs">
   <div class="nav-tab active" id="nav-dashboard" onclick="switchTab('dashboard')">📊 库存总览</div>
   <div class="nav-tab" id="nav-inventory" onclick="switchTab('inventory')">📦 库存管理</div>
+  <div class="nav-tab" id="nav-outbound" onclick="switchTab('outbound')">📤 出库</div>
+  <div class="nav-tab" id="nav-packages" onclick="switchTab('packages')">📋 套餐</div>
+  <div class="nav-tab" id="nav-stocktake" onclick="switchTab('stocktake')">📑 盘点</div>
   <div class="nav-tab" id="nav-purchase" onclick="switchTab('purchase')">🛒 采购建议</div>
   <div class="nav-tab" id="nav-records" onclick="switchTab('records')">🔄 出入库记录</div>
   <div class="nav-tab" id="nav-logs" onclick="switchTab('logs')">📝 操作日志</div>
@@ -123,17 +126,19 @@
       <input class="search-input" type="text" id="searchInput" placeholder="🔍 搜索品名、规格、供应商、批次号..." oninput="renderInventoryTable()">
       <div class="cat-tabs">
         <div class="cat-tab active" data-cat="全部" onclick="selectCat(this)">全部</div>
-        <div class="cat-tab" data-cat="原材料" onclick="selectCat(this)">🪵 原材料</div>
-        <div class="cat-tab" data-cat="半成品" onclick="selectCat(this)">🔨 半成品</div>
-        <div class="cat-tab" data-cat="成品" onclick="selectCat(this)">🪑 成品</div>
+        <div class="cat-tab" data-cat="standard" onclick="selectCat(this)">📦 标准件</div>
+        <div class="cat-tab" data-cat="custom" onclick="selectCat(this)">🛠️ 定制件</div>
+        <div class="cat-tab" data-cat="connector" onclick="selectCat(this)">🔩 连接件</div>
       </div>
       <div class="sub-cat-tabs" id="subCatFilter" style="display:none">
         <div class="cat-tab active" data-subcat="" onclick="selectSubCat(this)">全部二级</div>
+        <div class="cat-tab" data-subcat="柜体类" onclick="selectSubCat(this)">柜体类</div>
+        <div class="cat-tab" data-subcat="层板类" onclick="selectSubCat(this)">层板类</div>
+        <div class="cat-tab" data-subcat="腿架类" onclick="selectSubCat(this)">腿架类</div>
         <div class="cat-tab" data-subcat="螺丝类" onclick="selectSubCat(this)">螺丝类</div>
-        <div class="cat-tab" data-subcat="铝件类" onclick="selectSubCat(this)">铝件类</div>
-        <div class="cat-tab" data-subcat="铁件类" onclick="selectSubCat(this)">铁件类</div>
-        <div class="cat-tab" data-subcat="注塑件类" onclick="selectSubCat(this)">注塑件类</div>
-        <div class="cat-tab" data-subcat="其他原材料" onclick="selectSubCat(this)">其他原材料</div>
+        <div class="cat-tab" data-subcat="角码类" onclick="selectSubCat(this)">角码类</div>
+        <div class="cat-tab" data-subcat="铰链类" onclick="selectSubCat(this)">铰链类</div>
+        <div class="cat-tab" data-subcat="其他" onclick="selectSubCat(this)">其他</div>
       </div>
     </div>
 
@@ -160,7 +165,7 @@
               <th>分类</th><th>二级分类</th><th>品名</th><th>规格/型号</th><th>单位</th>
               <th>库存数量</th><th>单价(元)</th><th>库存价值</th><th>预警值</th>
               <th>最小订货量</th><th>批次号</th><th>有效期</th>
-              <th>供应商</th><th>存放位置</th>
+              <th>供应商</th><th>存放位置</th><th>在制/项目</th>
               <th id="actionColHeader">操作</th>
             </tr>
           </thead>
@@ -405,21 +410,33 @@
         <div class="form-group">
           <label>分类 <span class="req">*</span></label>
           <select class="form-select" id="fCategory" onchange="onCategoryChange()">
-            <option value="原材料">原材料</option>
-            <option value="半成品">半成品</option>
-            <option value="成品">成品</option>
+            <option value="standard">📦 标准件</option>
+            <option value="custom">🛠️ 定制件</option>
+            <option value="connector">🔩 连接件</option>
           </select>
         </div>
         <div class="form-group" id="subCatGroup" style="display:none">
-          <label>二级分类 <span class="hint-text">（原材料专用）</span></label>
+          <label>二级分类 <span class="hint-text">（细分类型，可选）</span></label>
           <select class="form-select" id="fSubCategory">
             <option value="">-- 请选择二级分类 --</option>
+            <option value="柜体类">柜体类</option>
+            <option value="层板类">层板类</option>
+            <option value="腿架类">腿架类</option>
             <option value="螺丝类">螺丝类</option>
-            <option value="铝件类">铝件类</option>
-            <option value="铁件类">铁件类</option>
-            <option value="注塑件类">注塑件类</option>
-            <option value="其他原材料">其他原材料</option>
+            <option value="角码类">角码类</option>
+            <option value="铰链类">铰链类</option>
+            <option value="其他">其他</option>
           </select>
+        </div>
+      </div>
+      <div class="form-row" id="customGroup" style="display:none">
+        <div class="form-group">
+          <label>在制量 <span class="hint-text">（定制件：生产中尚未入库数量）</span></label>
+          <input class="form-input" id="fWipQty" type="number" min="0" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>项目号 <span class="hint-text">（定制件关联订单/项目）</span></label>
+          <input class="form-input" id="fProjectNo" placeholder="例：P2026-001">
         </div>
       </div>
       <div class="form-row">
@@ -551,6 +568,7 @@
 <script src="./js/drawing-parser.js"></script>
 <script src="./js/ui.js"></script>
 <script src="./js/drawing-ui.js"></script>
+<script src="./js/v2.js"></script>
 <script src="./js/app.js"></script>
 
 <!-- Offline detection -->
