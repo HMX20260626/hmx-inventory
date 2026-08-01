@@ -28,4 +28,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 加载数据并订阅实时更新
   await refreshDashboard();
   subscribeToRealtime();
+
+  // 启动 GitHub 共享数据同步（多用户真同步）
+  if (typeof Sync !== 'undefined') {
+    Sync.onStatus((status, msg) => {
+      const badge = document.getElementById('syncBadge');
+      if (badge) {
+        badge.className = 'sync-badge sync-' + status;
+        badge.textContent = '● ' + (msg || status);
+      }
+    });
+    Sync.init();
+  }
 });
