@@ -5,7 +5,11 @@
 
 // 跨标签页同步（同浏览器多标签页实时刷新）
 const _sync = ('BroadcastChannel' in window) ? new BroadcastChannel('hmx_inventory_sync') : null;
-function notifyChange() { if (_sync) _sync.postMessage({ ts: Date.now() }); }
+function notifyChange() {
+  if (_sync) _sync.postMessage({ ts: Date.now() });
+  // 触发 GitHub 共享同步（防抖推送）
+  if (typeof Sync !== 'undefined' && Sync.enabled && Sync.enabled()) Sync.schedulePush();
+}
 
 function uid() { return LocalDB.uid(); }
 function nowISO() { return new Date().toISOString(); }
@@ -69,6 +73,7 @@ async function saveItem(itemData) {
 
 async function deleteItemById(id) {
   await LocalDB.del('inventory_items', id);
+  if (typeof Sync !== 'undefined') Sync.markDeleted(id);
   notifyChange();
 }
 
@@ -129,6 +134,7 @@ async function loadRecords() {
 
 async function clearAllRecords() {
   await LocalDB.clear('stock_records');
+  if (typeof Sync !== 'undefined') Sync.markCleared('stock_records');
   notifyChange();
 }
 
@@ -296,8 +302,10 @@ async function savePackage(pkg, items) {
 }
 
 async function deletePackage(id) {
+  const pitems = await LocalDB.queryByIndex('package_items', 'package_id', id);
   await LocalDB.deleteByIndex('package_items', 'package_id', id);
   await LocalDB.del('packages', id);
+  if (typeof Sync !== 'undefined') Sync.markDeleted(pitems.map((p) => p.id).concat(id));
   notifyChange();
 }
 
