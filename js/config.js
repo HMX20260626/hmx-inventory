@@ -1,13 +1,7 @@
 // ============================================================
-// Supabase 配置
-// 请在 Supabase 项目设置中获取你的 URL 和 anon key
+// 本地存储配置（零费用：数据存于浏览器 IndexedDB，不依赖任何后端）
+// 详见 js/localdb.js
 // ============================================================
-const SUPABASE_CONFIG = {
-  url: 'https://udxvcyroqwslkphckyvb.supabase.co',
-  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkeHZjeXJvcXdzbGtwaGNreXZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5NTk4MjcsImV4cCI6MjA5ODUzNTgyN30.Wz74I9Uwjh-PY-geoAiHqYZZX9gznDaXZTz1la87rJw',
-};
-
-const supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
 
 // ============================================================
 // 应用配置
