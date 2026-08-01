@@ -637,6 +637,25 @@ function showToast(msg, type = 'success') {
   }, duration);
 }
 
+// 配置团队共享同步 Token（存于本机浏览器，不进入仓库源码）
+function promptGithubToken() {
+  if (typeof Sync === 'undefined') { showToast('同步模块未加载', 'error'); return; }
+  const cur = (typeof localStorage !== 'undefined') ? (localStorage.getItem('hmx_github_token') || '') : '';
+  const tip = '配置团队共享同步 Token\n\n'
+    + '请粘贴一个「仅限 hmx20260626/hmx-inventory 仓库、Contents 读写」的 GitHub token。\n'
+    + '（保存在你本机浏览器，不上传任何服务器；清空可关闭同步）';
+  const t = prompt(tip, cur);
+  if (t === null) return;
+  if (t.trim() === '') {
+    Sync.setToken('');
+    showToast('已清除 Token，同步已关闭（数据仍存本机）', 'info');
+    return;
+  }
+  Sync.setToken(t.trim());
+  if (typeof showToast === 'function') showToast('Token 已保存，正在连接共享数据…', 'success');
+  Sync.connect();
+}
+
 // ============================================================
 // Import / Export（已扩展新字段）
 // ============================================================
