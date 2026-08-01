@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "updatedAt": "",
+  "data": {
+    "inventory_items": [],
+    "stock_records": [],
+    "operation_logs": [],
+    "packages": [],
+    "package_items": [],
+    "stock_out": [],
+    "stock_out_items": [],
+    "stocktake": [],
+    "stocktake_items": []
+  }
+}
