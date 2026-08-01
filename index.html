@@ -40,6 +40,7 @@
   </div>
   <div class="header-right">
     <span id="syncBadge" class="sync-badge sync-idle" title="多用户共享数据同步状态">● 同步中…</span>
+    <button id="btnSyncCfg" class="btn btn-mini" onclick="promptGithubToken()" title="配置团队共享同步 Token">⚙️</button>
     <button id="btnSyncNow" class="btn btn-mini" onclick="if(typeof Sync!=='undefined')Sync.syncNow()" title="立即与团队共享数据同步">🔄 同步</button>
     <span id="headerUser"></span>
     <span class="header-time" id="headerTime"></span>
