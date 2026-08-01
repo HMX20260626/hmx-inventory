@@ -738,6 +738,16 @@ async function importCSV(event) {
   event.target.value = '';
 }
 
+// 全量数据恢复（JSON 备份文件）
+function onImportDataFile(input) {
+  if (input.files && input.files[0]) {
+    importAllData(input.files[0])
+      .then(() => { if (typeof renderInventoryTable === 'function') renderInventoryTable(); })
+      .catch((e) => showToast('❌ 恢复失败：' + (e && e.message ? e.message : e), 'error'));
+  }
+  input.value = '';
+}
+
 // ============================================================
 // Utils
 // ============================================================
