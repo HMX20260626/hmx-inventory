@@ -29,8 +29,19 @@ const Sync = (function () {
     try { localStorage.setItem(key, JSON.stringify([...set])); } catch {}
   }
   function cfg() {
-    if (!_cfg) _cfg = (window.APP_CONFIG && APP_CONFIG.githubSync) || {};
+    if (!_cfg) {
+      _cfg = (window.APP_CONFIG && APP_CONFIG.githubSync) || {};
+      // token 优先用本机浏览器保存的（不写进仓库源码，避免密钥泄露）
+      const localTok = (typeof localStorage !== 'undefined') ? localStorage.getItem('hmx_github_token') : null;
+      if ((!_cfg.token) && localTok) _cfg.token = localTok;
+    }
     return _cfg;
+  }
+  function setToken(t) {
+    if (t && t.trim()) localStorage.setItem('hmx_github_token', t.trim());
+    else localStorage.removeItem('hmx_github_token');
+    _cfg = null; // 强制下次重新读取
+    return enabled();
   }
   function enabled() { return !!(cfg().token && cfg().repo && cfg().path); }
 
@@ -278,8 +289,17 @@ const Sync = (function () {
     startPolling();
   }
 
+  // 用户填 token 后调用：先上传本地改动（含首次建文件/合并），再拉取最新并启动轮询
+  async function connect() {
+    if (!enabled()) { setStatus('offline', '未配置同步'); return; }
+    setStatus('syncing', '连接中…');
+    try { await doPush(); } catch (e) { console.warn('connect initial push failed', e); }
+    await pullAndApply(true);
+    startPolling();
+  }
+
   return {
     init, schedulePush, syncNow, onStatus, getStatus,
-    markDeleted, markCleared, enabled,
+    markDeleted, markCleared, enabled, connect, setToken,
   };
 })();
