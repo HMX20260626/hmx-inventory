@@ -14,6 +14,7 @@ const Logs = {
     try {
       const operator = (Auth && Auth.getCurrentUser) ? Auth.getCurrentUser() : 'system';
       const payload = {
+        id: LocalDB.uid(),
         operator,
         action,
         target_type: targetType,
@@ -22,8 +23,7 @@ const Logs = {
         details: details || {},
         created_at: new Date().toISOString()
       };
-      const { error } = await supabaseClient.from('operation_logs').insert(payload);
-      if (error) console.warn('写入操作日志失败：', error);
+      await LocalDB.put('operation_logs', payload);
     } catch (e) {
       console.warn('Logs.write error:', e);
     }
@@ -32,52 +32,35 @@ const Logs = {
   // 拉取日志（带筛选 + 分页）
   async fetch() {
     const { action, operator, dateFrom, dateTo } = this.filter;
-    let q = supabaseClient
-      .from('operation_logs')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (action) q = q.eq('action', action);
-    if (operator) q = q.ilike('operator', `%${operator}%`);
-    if (dateFrom) q = q.gte('created_at', dateFrom + 'T00:00:00');
-    if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59');
-
+    let rows = await LocalDB.getAll('operation_logs');
+    if (action) rows = rows.filter((r) => r.action === action);
+    if (operator) rows = rows.filter((r) => (r.operator || '').toLowerCase().includes(operator.toLowerCase()));
+    if (dateFrom) rows = rows.filter((r) => (r.created_at || '') >= dateFrom + 'T00:00:00');
+    if (dateTo) rows = rows.filter((r) => (r.created_at || '') <= dateTo + 'T23:59:59');
+    rows.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    const total = rows.length;
     const from = (this.page - 1) * this.pageSize;
-    const to = from + this.pageSize - 1;
-    q = q.range(from, to);
-
-    const { data, error, count } = await q;
-    if (error) {
-      console.error('拉取日志失败：', error);
-      return { rows: [], total: 0 };
-    }
-    // count 由后端返回（依赖 PostgREST 的 exact count 头），这里降级为本次返回长度
-    return { rows: data || [], total: (data || []).length === this.pageSize ? from + data.length + 1 : from + (data || []).length };
+    const paged = rows.slice(from, from + this.pageSize);
+    return { rows: paged, total };
   },
 
   // 拉取全部（用于导出）
   async fetchAll() {
     const { action, operator, dateFrom, dateTo } = this.filter;
-    let q = supabaseClient
-      .from('operation_logs')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(5000);
-
-    if (action) q = q.eq('action', action);
-    if (operator) q = q.ilike('operator', `%${operator}%`);
-    if (dateFrom) q = q.gte('created_at', dateFrom + 'T00:00:00');
-    if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59');
-
-    const { data, error } = await q;
-    if (error) return [];
-    return data || [];
+    let rows = await LocalDB.getAll('operation_logs');
+    if (action) rows = rows.filter((r) => r.action === action);
+    if (operator) rows = rows.filter((r) => (r.operator || '').toLowerCase().includes(operator.toLowerCase()));
+    if (dateFrom) rows = rows.filter((r) => (r.created_at || '') >= dateFrom + 'T00:00:00');
+    if (dateTo) rows = rows.filter((r) => (r.created_at || '') <= dateTo + 'T23:59:59');
+    rows.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    return rows;
   },
 
   // 渲染表格
   async render() {
-    const { rows } = await this.fetch();
+    const { rows, total } = await this.fetch();
     this.cache = rows;
+    this.total = total;
     const tbody = document.getElementById('logsTbody');
     if (!tbody) return;
 
@@ -111,21 +94,21 @@ const Logs = {
       `;
     }).join('');
 
-    document.getElementById('logPageInfo').textContent = `共 ${rows.length} 条（本页）`;
-    this.renderPageBtns(rows.length);
+    document.getElementById('logPageInfo').textContent = `共 ${this.total} 条`;
+    this.renderPageBtns();
   },
 
-  renderPageBtns(currentCount) {
+  renderPageBtns() {
     const wrap = document.getElementById('logPageBtns');
     if (!wrap) return;
-    // 简化版：上一页/下一页（没有总数就只能这样）
+    const total = this.total || 0;
     const prev = this.page > 1
       ? `<button class="page-btn" onclick="Logs.goPage(${this.page - 1})">‹ 上一页</button>`
       : `<button class="page-btn" disabled>‹ 上一页</button>`;
-    const next = currentCount === this.pageSize
+    const next = (this.page * this.pageSize) < total
       ? `<button class="page-btn" onclick="Logs.goPage(${this.page + 1})">下一页 ›</button>`
       : `<button class="page-btn" disabled>下一页 ›</button>`;
-    wrap.innerHTML = prev + `<span style="padding:0 8px">第 ${this.page} 页</span>` + next;
+    wrap.innerHTML = prev + `<span style="padding:0 8px">第 ${this.page} 页 / 共 ${total} 条</span>` + next;
   },
 
   goPage(p) {
