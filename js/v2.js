@@ -23,8 +23,8 @@ let stId = null, stItems = [];
 
 function showV2Error(container, err, what) {
   const msg = (err && err.message) || String(err);
-  const hint = /relation|does not exist|table/.test(msg)
-    ? '<br><span class="hint-text">请先在 Supabase SQL Editor 执行 migration_stage3.sql，然后刷新本页。</span>'
+  const hint = /indexeddb|database|store/i.test(msg || '')
+    ? '<br><span class="hint-text">本地数据库初始化失败，请尝试硬刷新（Ctrl/Cmd+Shift+R）或使用支持的浏览器（Chrome/Edge/Firefox）。</span>'
     : '';
   container.innerHTML = `<div class="alert-banner show" style="display:flex">
     <span class="alert-icon">⚠️</span>
